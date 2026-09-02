@@ -31,6 +31,7 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import json
 from collections import defaultdict
+import numpy as np
 
 from src.utils import config
 from src.database.database import get_connection, close_connection
@@ -757,6 +758,51 @@ def render_live_view():
 
     # Parameter gauges grouped by subsystem
     st.subheader("Engine Parameters")
+
+    # ML panel: anomaly score and (placeholder) RUL
+    try:
+        cols_ml = st.columns([3, 1])
+        with cols_ml[1]:
+            st.subheader("ML Insights")
+            # Try to import inference helpers from ml package
+            try:
+                from ml.infer import load_model as ml_load_model
+                from ml.infer import get_latest_window as ml_get_latest_window
+                from ml.infer import score_window as ml_score_window
+
+                model_path = os.path.join(PROJECT_ROOT, "ml", "models", "anomaly_iforest.pkl")
+                if os.path.exists(model_path):
+                    ml_model = ml_load_model(model_path)
+                    conn_ml = get_db()
+                    try:
+                        df_win = ml_get_latest_window(conn_ml, selected_flight, window_size=30)
+                    finally:
+                        conn_ml.close()
+
+                    score = ml_score_window(df_win, ml_model)
+                    if np.isnan(score):
+                        st.info("No recent telemetry window for ML scoring")
+                    else:
+                        # Simple thresholds for display (calibrate later)
+                        if score > 0.5:
+                            tag = "CRITICAL"
+                            color = "#dc3545"
+                        elif score > 0.2:
+                            tag = "CAUTION"
+                            color = "#ffc107"
+                        else:
+                            tag = "NORMAL"
+                            color = "#28a745"
+
+                        st.markdown(f"**Anomaly score:** <span style='color:{color}'>{score:.3f} ({tag})</span>", unsafe_allow_html=True)
+                        st.caption("Higher score = more anomalous (calibrate thresholds with data)")
+                else:
+                    st.info("ML model not found. Run `ml/train_baseline.py` to create it.")
+            except Exception as _e:
+                st.info("ML inference unavailable: install scikit-learn and train model.")
+    except Exception:
+        # Non-fatal UI error; continue rendering other widgets
+        pass
 
     for subsys, params in config.SUBSYSTEM_PARAMETERS.items():
         st.subheader(subsys.replace("_", " ").title())
