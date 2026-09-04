@@ -1,0 +1,73 @@
+signals:
+  rpm:
+    can_id: 0x100
+    unit: rpm
+    scale: 1
+    offset: 0
+    byte_order: big
+    dtype: uint16
+    min: 0
+    max: 7000
+  cht:
+    can_id: 0x101
+    unit: degC
+    scale: 0.1
+    offset: 0
+    byte_order: big
+    dtype: uint16
+    min: -40
+    max: 300
+  egt:
+    can_id: 0x102
+    unit: degC
+    scale: 0.1
+    offset: 0
+    byte_order: big
+    dtype: uint16
+    min: -40
+    max: 1000
+  oil_pressure:
+    can_id: 0x103
+    unit: kPa
+    scale: 0.1
+    offset: 0
+    byte_order: big
+    dtype: uint16
+    min: 0
+    max: 600
+  oil_temperature:
+    can_id: 0x104
+    unit: degC
+    scale: 0.1
+    offset: 0
+    byte_order: big
+    dtype: uint16
+    min: -40
+    max: 200
+  fuel_flow:
+    can_id: 0x105
+    unit: L/h
+    scale: 0.01
+    offset: 0
+    byte_order: big
+    dtype: uint16
+    min: 0
+    max: 100
+  vibration:
+    can_id: 0x106
+    unit: mm/s
+    scale: 0.01
+    offset: 0
+    byte_order: big
+    dtype: uint16
+    min: 0
+    max: 50
+  battery_voltage:
+    can_id: 0x107
+    unit: V
+    scale: 0.01
+    offset: 0
+    byte_order: big
+    dtype: uint16
+    min: 0
+    max: 40

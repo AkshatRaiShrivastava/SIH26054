@@ -1,4 +1,9 @@
 """
+LEGACY PROTOTYPE — not part of the supported live CAN dashboard.
+
+The supported dashboard is DashboardCode/frontend (React), served by the
+DashboardCode/backend FastAPI CAN receiver. See the repository README.md.
+
 dashboard.py — STEPS 5-7: Digital Twin Dashboard with live and historical views.
 
 Streamlit-based dashboard showing:

@@ -1,0 +1,151 @@
+:root {
+  color-scheme: dark;
+  --bg: #060b18;
+  --panel: #0b1327;
+  --panel-2: #0e1730;
+  --border: rgba(120, 160, 255, 0.18);
+  --text: #e8eeff;
+  --muted: #8ea0c8;
+  --green: #4ade80;
+  --yellow: #fbbf24;
+  --red: #f87171;
+  --blue: #60a5fa;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.18), transparent 24%),
+    radial-gradient(circle at top right, rgba(16, 185, 129, 0.12), transparent 20%),
+    var(--bg);
+  color: var(--text);
+}
+
+.app-shell {
+  padding: 18px;
+  display: grid;
+  gap: 16px;
+}
+
+.panel {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(8, 15, 31, 0.98));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.26);
+  padding: 16px;
+}
+
+.panel-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.panel-heading h2 {
+  margin: 0;
+  letter-spacing: 0.08em;
+  font-size: 0.95rem;
+  color: #dbe7ff;
+}
+
+.status-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.status-pill, .fresh-pill, .status-badge {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+.status-badge.normal { color: var(--green); }
+.status-badge.caution { color: var(--yellow); }
+.status-badge.critical { color: var(--red); }
+.status-badge.muted { color: var(--muted); }
+.fresh-pill.fresh, .freshness-row.fresh { color: var(--green); }
+.fresh-pill.stale, .freshness-row.stale { color: var(--red); }
+
+.connection-grid, .status-metrics, .health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.label { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.value-large { font-size: 1.2rem; font-weight: 700; margin-top: 4px; }
+.small-note { margin-top: 12px; color: var(--muted); font-size: 0.84rem; }
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.telemetry-card {
+  background: linear-gradient(180deg, rgba(15, 24, 48, 0.96), rgba(10, 16, 33, 0.96));
+  border: 1px solid rgba(120, 160, 255, 0.14);
+  border-radius: 14px;
+  padding: 14px;
+}
+.telemetry-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.telemetry-header h3 { margin: 0; font-size: 0.95rem; }
+.telemetry-value { font-size: 1.8rem; font-weight: 800; margin: 14px 0 8px; }
+.telemetry-value span { font-size: 0.9rem; color: var(--muted); font-weight: 500; }
+.telemetry-footer { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.82rem; }
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 14px;
+}
+
+.chart-wrap { width: 100%; }
+
+.chart-legend {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.data-health-panel { display: grid; gap: 12px; }
+.fault-alerts {
+  margin-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.fault-alerts .label { margin-bottom: 4px; }
+.fault-alerts.caution { color: var(--yellow); }
+.fault-alerts.critical { color: var(--red); }
+.fault-alerts.normal { color: var(--green); }
+.freshness-list { display: grid; gap: 8px; }
+.freshness-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 8px;
+}
+
+@media (max-width: 720px) {
+  .chart-grid { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/ConnectionStatus.tsx","./src/components/DataHealth.tsx","./src/components/EngineStatus.tsx","./src/components/TelemetryCard.tsx","./src/components/TelemetryChart.tsx","./src/config/thresholds.ts","./src/hooks/useTelemetry.ts","./src/types/telemetry.ts"],"version":"5.9.3"}
