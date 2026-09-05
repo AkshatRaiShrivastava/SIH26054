@@ -17,7 +17,7 @@ The React application in `DashboardCode/frontend` is the only supported live das
 - Linux with SocketCAN tools: `ip` and `modprobe`
 - Python 3.10 or later
 - Node.js 18 or later and npm
-- Docker with Docker Compose (for the project PostgreSQL service)
+- Docker Engine with Docker Compose installed and running (for the project PostgreSQL service)
 - Permission to run `sudo` when creating the virtual CAN interface
 
 ### First run
@@ -31,11 +31,81 @@ make can-up
 make dev
 ```
 
+The project runs only on Linux. Windows users must use a WSL2 Linux distribution; do not run the bundled `make.exe` from PowerShell. The simulator, CAN receiver, `can-up`, and `dev` targets require Linux SocketCAN (`vcan`, `ip`, and `modprobe`) and Bash.
+
+### Windows setup (WSL2)
+
+1. In an elevated PowerShell window, install Ubuntu for WSL2:
+
+   ```powershell
+   wsl --install -d Ubuntu
+   ```
+
+   Restart if Windows asks, then open **Ubuntu** and complete the Linux username/password setup.
+
+2. Install Make and the Linux prerequisites inside the Ubuntu/WSL terminal:
+
+   ```bash
+   sudo apt update
+   sudo apt install -y make python3 python3-pip nodejs npm iproute2 kmod
+   ```
+
+3. Install Docker Desktop on Windows, enable **Use the WSL 2 based engine**, and enable WSL integration for the Ubuntu distribution in **Settings → Resources → WSL Integration**. Docker and Docker Compose will then be available in the Ubuntu/WSL terminal. Verify this with:
+
+   ```bash
+   docker --version
+   docker compose version
+   ```
+
+4. From the repository in the WSL terminal (for example, `/mnt/d/Akshat/College/SIH26054`), run the normal Linux commands:
+
+```bash
+make db-up
+make install
+make can-up
+make dev
+```
+
 Open http://localhost:5173 for the dashboard. API documentation is available at http://localhost:8000/docs.
 
 `make dev` runs the simulator, CAN receiver/FastAPI backend, and React/Vite dashboard in one terminal. Press `Ctrl+C` once to stop all three processes. `make can-up` is normally needed once after each computer restart; it creates `vcan0` only when that interface does not already exist.
 
 The default PostgreSQL database is started by `make db-up` and is available at `postgresql://uav:uav@localhost:5432/uav_telemetry`. To use a team-managed database, export `DATABASE_URL` before running any command; `.env.example` lists the expected values.
+
+For a real ECU or a simulator with faults, leave the default label as `unknown`; the receiver cannot truthfully infer a fault label from CAN sensor data alone.
+
+### To create a static dataset of 15 ideal, no-fault flights without starting CAN, the backend, or the frontend:
+
+```bash
+make generate-ideal-flights
+```
+
+It writes to PostgreSQL using the exact same `flights` and `flight_telemetry` schema as the live recorder. Each flight is an independent time series with 600 samples by default. Change the size or deliberately replace only previous ideal flights:
+
+```bash
+make generate-ideal-flights IDEAL_FLIGHT_ARGS="--flights 10 --steps 1000 --replace"
+```
+
+### Fault and climate-labelled flights
+
+Generate static, labelled time-series data without requiring `vcan0` or a running dashboard:
+
+```bash
+make generate-data DATA_ARGS="--steps 300 --samples-per-scenario 3 --replace"
+```
+
+This creates all 32 combinations of the five supported faults (including `normal`) across eight representative UAV climate profiles: temperate, hot desert, humid monsoon, maritime coastal, cold/high altitude, hot/high altitude, tropical wet, and cold dry. With the defaults, it generates 768 scenarios and 230,400 time-series rows.
+
+The output has two tables:
+
+- `training_scenarios`: one row per climate/fault/input scenario with its exact labels and climate profile.
+- `training_telemetry`: CAN-shaped sensor measurements joined with climate context and multi-label fault columns (`injector_degradation`, `overheating`, `lubrication_problem`, `vibration_fault`, `sensor_drift`).
+
+CAN data remains sensor/hardware-only. Climate fields and fault truth labels are generated separately and stored alongside each sample specifically for supervised training; they are never implied to come from a real ECU. The script does not replace existing `training_*` tables unless `--replace` is passed. For a smaller smoke-test dataset use:
+
+```bash
+make generate-data DATA_ARGS="--steps 10 --samples-per-scenario 1 --replace"
+```
 
 ### Real CAN hardware
 
@@ -125,41 +195,6 @@ For a normal simulator run that you want to label explicitly as ideal, use:
 FLIGHT_LABEL=ideal_no_fault make dev
 ```
 
-For a real ECU or a simulator with faults, leave the default label as `unknown`; the receiver cannot truthfully infer a fault label from CAN sensor data alone.
-
-To create a static dataset of 15 ideal, no-fault flights without starting CAN, the backend, or the frontend:
-
-```bash
-make generate-ideal-flights
-```
-
-It writes to PostgreSQL using the exact same `flights` and `flight_telemetry` schema as the live recorder. Each flight is an independent time series with 600 samples by default. Change the size or deliberately replace only previous ideal flights:
-
-```bash
-make generate-ideal-flights IDEAL_FLIGHT_ARGS="--flights 10 --steps 1000 --replace"
-```
-
-### Fault and climate-labelled flights
-
-Generate static, labelled time-series data without requiring `vcan0` or a running dashboard:
-
-```bash
-make generate-data DATA_ARGS="--steps 300 --samples-per-scenario 3 --replace"
-```
-
-This creates all 32 combinations of the five supported faults (including `normal`) across eight representative UAV climate profiles: temperate, hot desert, humid monsoon, maritime coastal, cold/high altitude, hot/high altitude, tropical wet, and cold dry. With the defaults, it generates 768 scenarios and 230,400 time-series rows.
-
-The output has two tables:
-
-- `training_scenarios`: one row per climate/fault/input scenario with its exact labels and climate profile.
-- `training_telemetry`: CAN-shaped sensor measurements joined with climate context and multi-label fault columns (`injector_degradation`, `overheating`, `lubrication_problem`, `vibration_fault`, `sensor_drift`).
-
-CAN data remains sensor/hardware-only. Climate fields and fault truth labels are generated separately and stored alongside each sample specifically for supervised training; they are never implied to come from a real ECU. The script does not replace existing `training_*` tables unless `--replace` is passed. For a smaller smoke-test dataset use:
-
-```bash
-make generate-data DATA_ARGS="--steps 10 --samples-per-scenario 1 --replace"
-```
-
 ## Repository layout
 
 ```text
@@ -181,8 +216,6 @@ Keep browser code in `DashboardCode/frontend`, CAN protocol and ingestion code i
 ## Notes
 
 This is a synthetic engineering prototype. The simulator uses physically plausible relationships, but its thresholds and output are not validated for use in an aircraft. Replace the simulator with a real ECU/CAN source only after appropriate hardware, safety, and calibration validation.
-
-
 
 my team has to train mutiple ML models for which they need static data in ideal conditions as well as on all the possible fault combinations and climatic conditions
 so make some script through which we can generate the data in SQL in time series type as we are receiving the data from CAN simulator
