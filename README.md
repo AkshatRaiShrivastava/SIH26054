@@ -1,68 +1,139 @@
 # UAV Engine Digital Twin
 
-A comprehensive digital twin for UAV engine telemetry, featuring real-time CAN ingestion, physics-based residual analysis, and flight history tracking.
+This project is a prototype demonstration of a MALE UAV piston-engine digital twin built around a synthetic CAN pipeline, PostgreSQL storage, a physics model, ML anomaly detection, rule-based diagnosis, health scoring, and RUL estimation.
 
-## 🚀 Quick Start
+## Overview
 
-The entire system is containerized for a "one-command" setup.
+The system demonstrates the complete flow:
 
-### 1. Clone the repository
-```bash
-git clone <repo-url>
-cd SIH26054
+Synthetic Engine / Mission Simulator -> SocketCAN / vcan0 -> CAN ingestion -> PostgreSQL -> Physics -> ML -> Rules -> Health Index -> RUL -> FastAPI -> WebSocket -> React dashboard.
+
+## Important engineering note
+
+This project is intentionally a prototype/demonstrator. It relies on synthetic telemetry and stated engineering assumptions. The physics model, fault signatures, health index weighting, and RUL training are not OEM-certified and should be recalibrated against real engine fleet data before deployment.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A[Synthetic Engine Simulator] --> B[SocketCAN / vcan0]
+    B --> C[CAN Ingestion & Decoding]
+    C --> D[(PostgreSQL)]
+    C --> E[Physics Digital Twin]
+    E --> F[ML Anomaly Detection]
+    E --> G[Rule-Based Diagnosis]
+    F --> H[Health Index]
+    H --> I[RUL Prediction]
+    I --> J[FastAPI Backend]
+    J --> K[WebSocket / REST]
+    K --> L[React Dashboard]
 ```
 
-### 2. Configure Environment
+## Mission phases
+
+- POWER ON: 0-2 min
+- PREFLIGHT CHECK: 2-5 min
+- TAKEOFF: 5-6 min
+- CLIMB: 6-14 min
+- CRUISE / ISR: 14-54 min
+- DESCEND: 54-59 min
+- LAND: 59-60 min
+
+## CAN signal set
+
+The DBC file is the authoritative source for signal naming. Canonical names:
+
+- rpm
+- cht_c
+- egt_c
+- oil_pressure_kpa
+- oil_temperature_c
+- fuel_flow_lph
+- vibration_mms
+- afr
+- battery_voltage
+- altitude_m
+- ambient_temp_c
+
+## Physics model
+
+The atmosphere model uses the prototype simplification:
+
+- ambient temperature: $T(h) = T_0 - 0.0065h$
+- density ratio: $\sigma = (1 - 2.2558e-5 \cdot altitude_m)^{4.2559}$
+
+These constants are stated assumptions for the prototype and are kept centralized in `physics/config.py`.
+
+## ML model
+
+The anomaly detector uses an Isolation Forest trained only on healthy synthetic telemetry. It is persisted to `ml/models` and loaded at runtime without retraining on every startup.
+
+## Rule-based diagnosis
+
+The rules operate only when the ML layer has marked a sample as anomalous. Physics-derived deviations are treated as the primary driver for root-cause classification.
+
+## Health Index
+
+The health index is defined as a prototype composite model:
+
+- mean absolute deviation from expected values
+- anomaly score penalty
+- final score capped at 0-100
+
+The weighting constants are intentionally stored in `physics/config.py`.
+
+## RUL methodology
+
+The RUL pipeline uses synthetic degradation missions and a RandomForestRegressor. Predictions are generated from historical DB points and persisted to `rul_predictions`.
+
+## Database schema
+
+The project uses PostgreSQL with tables:
+
+- mission_runs
+- raw_telemetry
+- computed_metrics
+- fault_events
+- rul_predictions
+
+## Run
+
 ```bash
 cp .env.example .env
-# Optional: Edit .env to change passwords or ports
-```
-
-### 3. Start Everything
-```bash
 docker compose up --build
 ```
 
-### 4. Access the Dashboard
-Open your browser to: **[http://localhost:3000](http://localhost:3000)**
+Then open http://localhost:3000.
 
----
+## Training models manually
 
-## 🛠️ Development Commands
+```bash
+python -m ml.train
+python -m rul.train
+```
 
-| Command | Action |
-| :--- | :--- |
-| `make up` | Start the entire stack (equivalent to `docker compose up --build`) |
-| `make logs` | View real-time logs from all services |
-| `make down` | Stop the services (preserves database data) |
-| `make down-vol` | Stop services and **wipe all flight history** |
-| `make clean` | Complete cleanup of containers and volumes |
+## Tests
 
----
+```bash
+pytest -q
+```
 
-## 📐 Architecture
+## Known limitations
 
-The system uses a modular Docker Compose architecture:
+- Synthetic telemetry only
+- Prototype physics and RUL assumptions
+- No certified OEM engine calibration
+- Not suitable for real flight-critical operations without calibration against measured engine data
 
-- **`can-init`**: (Privileged) Configures the Linux `vcan0` interface on the host.
-- **`uav-simulator`**: Acts as a fake ECU, pushing SocketCAN frames to `vcan0`.
-- **`uav-backend`**: Fast API server that decodes CAN, runs physics, and stores data.
-- **`uav-telemetry-postgres`**: Persistent PostgreSQL storage for flight history.
-- **`uav-frontend`**: React dashboard for live monitoring and history analysis.
+## Future deployment architecture
 
-### Data Flow
-`Simulator` $\rightarrow$ `vcan0` $\rightarrow$ `Backend` $\rightarrow$ `PostgreSQL` $\rightarrow$ `React Dashboard`
+This project is a single-host demonstrator. A future production architecture would replace the synthetic engine with real ECU/CAN interfaces, add measured engine calibration and validation, and tighten the digital-twin models against real flight data.
 
----
+## Replacing vcan0 with can0
 
-## 🧪 Acceptance Criteria Verification
+If the hardware exposes a real CAN bus instead of a virtual interface:
 
-To verify the system is working:
-1. Run `docker compose up --build`.
-2. Navigate to `http://localhost:3000`.
-3. Click **START NEW SIMULATION**.
-4. Verify a **Flight ID** (e.g., `FLT-2026...`) appears.
-5. Observe **CAN Telemetry** and **Physics Residuals** updating in real-time.
-6. Click **STOP SIMULATION**.
-7. Go to **FLIGHT HISTORY** and verify the completed flight is listed.
-8. Click the flight to view historical telemetry.
+- set `CAN_INTERFACE=can0`
+- ensure the host Linux interface is present
+- update `docker-compose.yml` networking as needed
+- verify `ip link show can0` before starting the simulator

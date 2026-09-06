@@ -1,0 +1,60 @@
+VERSION "1.0"
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    CAT_DEF_
+    CAT_
+    FILTER
+    BA_DEF_REL_
+    BA_REL_
+    BA_DEF_DEF_REL_
+    BU_SG_REL_
+    BU_EV_REL_
+    SG_MUL_VAL_
+    BA_DEF_SGTYPE_
+    SGTYPE_
+    SGTYPE_VAL_
+    BA_SGTYPE_
+    SIG_VALTYPE_
+    VAL_TABLE_
+    SIG_GROUP_
+    BO_TX_BU_
+    BO_RX_BU_
+    BU_BO_REL_
+    BU_EV_REL_
+    SG_MUL_VAL_
+
+BS_:
+
+BU_: MASTER
+
+BO_ 256 ENGINE_RPM: 8 MASTER
+ SG_ rpm : 0|16@1+ (1,0) [0|20000] "rpm" Vector__XXX
+BO_ 257 ENGINE_CHT: 8 MASTER
+ SG_ cht_c : 0|16@1+ (1,0) [-40|250] "degC" Vector__XXX
+BO_ 258 ENGINE_EGT: 8 MASTER
+ SG_ egt_c : 0|16@1+ (1,0) [0|1200] "degC" Vector__XXX
+BO_ 259 ENGINE_OIL_PRESSURE: 8 MASTER
+ SG_ oil_pressure_kpa : 0|16@1+ (1,0) [0|800] "kPa" Vector__XXX
+BO_ 260 ENGINE_OIL_TEMPERATURE: 8 MASTER
+ SG_ oil_temperature_c : 0|16@1+ (1,0) [-40|180] "degC" Vector__XXX
+BO_ 261 ENGINE_FUEL_FLOW: 8 MASTER
+ SG_ fuel_flow_lph : 0|16@1+ (1,0) [0|80] "L/h" Vector__XXX
+BO_ 262 ENGINE_VIBRATION: 8 MASTER
+ SG_ vibration_mms : 0|16@1+ (0.01,0) [0|20] "mm/s" Vector__XXX
+BO_ 263 ENGINE_AFR: 8 MASTER
+ SG_ afr : 0|16@1+ (0.01,0) [8|20] "" Vector__XXX
+BO_ 264 ENGINE_BATTERY: 8 MASTER
+ SG_ battery_voltage : 0|16@1+ (0.01,0) [0|30] "V" Vector__XXX
+BO_ 265 ENGINE_STATUS: 8 MASTER
+ SG_ mission_phase : 0|8@1+ (1,0) [0|10] "phase" Vector__XXX
+BO_ 267 ENGINE_ALTITUDE: 8 MASTER
+ SG_ altitude_m : 0|16@1+ (1,0) [0|12000] "m" Vector__XXX
+BO_ 268 ENGINE_AMBIENT_TEMPERATURE: 8 MASTER
+ SG_ ambient_temp_c : 0|16@1+ (1,0) [-60|60] "degC" Vector__XXX
+
+VAL_ 265 mission_phase 0 "POWER_ON" 1 "PREFLIGHT_CHECK" 2 "TAKEOFF" 3 "CLIMB" 4 "CRUISE_ISR" 5 "DESCEND" 6 "LAND";
