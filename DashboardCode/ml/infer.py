@@ -12,6 +12,7 @@ import sqlite3
 
 import numpy as np
 import pandas as pd
+from src.core.physics_layer import PhysicsEvaluator
 
 DEFAULT_MODEL = "Code/ml/models/anomaly_iforest.pkl"
 
@@ -25,7 +26,7 @@ def load_model(path: str):
 def get_latest_window(conn: sqlite3.Connection, flight_id: str, window_size: int = 30) -> pd.DataFrame:
     q = (
         "SELECT mission_time_s, timestamp, rpm, cht_c, egt_c, oil_temp_c, oil_pressure_psi, "
-        "fuel_flow_lph, vibration_g, battery_v, afr, humidity_pct, altitude_m, ambient_temp_c "
+        "fuel_flow_lph, vibration_g, battery_v, afr, humidity_pct, altitude_m, ambient_temp_c, phase "
         "FROM telemetry WHERE flight_id = ? ORDER BY mission_time_s DESC LIMIT ?"
     )
     df = pd.read_sql_query(q, conn, params=(flight_id, window_size))
@@ -59,8 +60,36 @@ def main():
     df = get_latest_window(conn, args.flight, args.window)
     conn.close()
 
+    # Integrate Physics Layer: Transform raw telemetry to residuals
+    evaluator = PhysicsEvaluator(flight_id=args.flight)
+    residual_data = []
+    for _, row in df.iterrows():
+        expected = evaluator.compute_expected_values(row.to_dict())
+        row_devs = {}
+        # Use the features the model was trained on (expecting _dev suffix)
+        # We need to load the model first to know the features, but we can also use the known list
+        # For now, let's load the model first.
+        pass
+
+    # Correction: Load model first to get features
     model = load_model(args.model)
-    score = score_window(df, model)
+    features = model["features"]
+
+    # Compute residuals for each row in the window
+    transformed_rows = []
+    for _, row in df.iterrows():
+        expected = evaluator.compute_expected_values(row.to_dict())
+        devs = {}
+        for feat in features:
+            param = feat.replace("_dev", "")
+            actual = row.get(param, 0)
+            expected_val = expected.get(param, 0)
+            devs[feat] = evaluator.compute_deviation(actual, expected_val)
+        transformed_rows.append(devs)
+
+    df_residuals = pd.DataFrame(transformed_rows)
+    
+    score = score_window(df_residuals, model)
 
     out = {"flight_id": args.flight, "anomaly_score": score}
     print(json.dumps(out))

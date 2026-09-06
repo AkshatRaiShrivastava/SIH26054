@@ -23,13 +23,13 @@ class TelemetryBroadcaster:
     def unsubscribe(self, queue: asyncio.Queue) -> None:
         self.subscribers.discard(queue)
 
-    async def broadcast(self, telemetry: EngineTelemetry) -> None:
+    async def broadcast(self, data: Any) -> None:
         stale = []
         for queue in self.subscribers:
             try:
                 if queue.full():
                     queue.get_nowait()
-                queue.put_nowait(telemetry)
+                queue.put_nowait(data)
             except Exception:
                 stale.append(queue)
         for queue in stale:
@@ -41,7 +41,10 @@ async def websocket_telemetry_endpoint(websocket: WebSocket, broadcaster: Teleme
     queue = await broadcaster.subscribe()
     try:
         while True:
-            telemetry = await queue.get()
-            await websocket.send_json(telemetry.model_dump(mode="json"))
+            data = await queue.get()
+            if hasattr(data, "model_dump"):
+                await websocket.send_json(data.model_dump(mode="json"))
+            else:
+                await websocket.send_json(data)
     finally:
         broadcaster.unsubscribe(queue)

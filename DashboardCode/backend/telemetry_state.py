@@ -20,6 +20,10 @@ SIGNAL_NAMES = [
     "fuel_flow",
     "vibration",
     "battery_voltage",
+    "mission_stage",
+    "altitude",
+    "throttle",
+    "load",
 ]
 
 
@@ -39,6 +43,24 @@ class TelemetryState:
         "fuel_flow": 0.0,
         "vibration": 0.0,
         "battery_voltage": 0.0,
+        "mission_stage": 0.0,
+        "altitude": 0.0,
+        "throttle": 0.0,
+        "load": 0.0,
+    }, init=False)
+    _ema_values: Dict[str, float] = field(default_factory=lambda: {
+        "rpm": 0.0,
+        "cht": 0.0,
+        "egt": 0.0,
+        "oil_pressure": 0.0,
+        "oil_temperature": 0.0,
+        "fuel_flow": 0.0,
+        "vibration": 0.0,
+        "battery_voltage": 0.0,
+        "mission_stage": 0.0,
+        "altitude": 0.0,
+        "throttle": 0.0,
+        "load": 0.0,
     }, init=False)
     _frames_received: int = field(default=0, init=False)
     _unknown_frames: int = field(default=0, init=False)
@@ -58,8 +80,14 @@ class TelemetryState:
 
     def update(self, telemetry: Dict[str, float]) -> EngineTelemetry:
         now = datetime.now(timezone.utc)
+        alpha = 0.1  # Smoothing factor (lower = smoother)
         with self._lock:
-            self._latest_values.update(telemetry)
+            for name, val in telemetry.items():
+                # Apply EMA: S_t = alpha * Y_t + (1 - alpha) * S_{t-1}
+                prev_val = self._ema_values.get(name, val)
+                self._ema_values[name] = alpha * val + (1 - alpha) * prev_val
+                self._latest_values[name] = self._ema_values[name]
+
             self._sequence += 1
             self._latest = EngineTelemetry(
                 timestamp=now.isoformat(),
@@ -71,6 +99,10 @@ class TelemetryState:
                 fuel_flow=float(self._latest_values["fuel_flow"]),
                 vibration=float(self._latest_values["vibration"]),
                 battery_voltage=float(self._latest_values["battery_voltage"]),
+                mission_stage=float(self._latest_values["mission_stage"]),
+                altitude=float(self._latest_values["altitude"]),
+                throttle=float(self._latest_values["throttle"]),
+                load=float(self._latest_values["load"]),
                 source_interface=self.interface,
                 sequence=self._sequence,
             )
@@ -109,11 +141,13 @@ class TelemetryState:
             return DataHealth(
                 can_interface="CONNECTED" if self._frames_received > 0 else "DISCONNECTED",
                 frames_received=self._frames_received,
+                total_frames=self._frames_received,
                 frames_per_sec=round(frame_rate, 1),
                 unknown_frames=self._unknown_frames,
                 invalid_frames=self._invalid_frames,
                 signals_total=len(SIGNAL_NAMES),
                 signals_fresh=fresh_count,
+                stale=fresh_count < len(SIGNAL_NAMES),
                 signal_freshness=freshness,
                 last_update=self._latest.timestamp if self._latest else None,
                 latest_sequence=self._sequence,

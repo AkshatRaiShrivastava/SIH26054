@@ -1,1 +1,0 @@
-"""Engine telemetry simulator package."""

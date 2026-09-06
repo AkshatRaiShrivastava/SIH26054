@@ -19,11 +19,12 @@ export function useTelemetry() {
   const socketRef = useRef<WebSocket | null>(null);
 
   const fetchBootstrap = useCallback(async () => {
+    const API_BASE = import.meta.env.VITE_API_URL || '';
     try {
       const [latestResponse, healthResponse, dataHealthResponse] = await Promise.all([
-        fetch('/api/telemetry/latest'),
-        fetch('/api/health'),
-        fetch('/api/data-health'),
+        fetch(`${API_BASE}/api/telemetry/latest`),
+        fetch(`${API_BASE}/api/health`),
+        fetch(`${API_BASE}/api/data-health`),
       ]);
 
       if (latestResponse.ok) {
@@ -75,7 +76,8 @@ export function useTelemetry() {
       return;
     }
 
-    const socket = new WebSocket('/ws/telemetry');
+    const WS_BASE = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/telemetry';
+    const socket = new WebSocket(WS_BASE);
     socketRef.current = socket;
 
     socket.onopen = () => {
@@ -84,9 +86,12 @@ export function useTelemetry() {
 
     socket.onmessage = (event) => {
       try {
-        const next = JSON.parse(event.data) as EngineTelemetry;
-        pendingRef.current = next;
-        scheduleFlush();
+        const payload = JSON.parse(event.data);
+        const next = payload.telemetry as EngineTelemetry;
+        if (next) {
+          pendingRef.current = next;
+          scheduleFlush();
+        }
       } catch {
         // Ignore malformed payloads but keep the connection alive.
       }
@@ -110,10 +115,11 @@ export function useTelemetry() {
     connect();
 
     const pollDataHealth = window.setInterval(async () => {
+      const API_BASE = import.meta.env.VITE_API_URL || '';
       try {
-        const [healthResponse, dataHealthResponse] = await Promise.all([
-          fetch('/api/health'),
-          fetch('/api/data-health'),
+      const [healthResponse, dataHealthResponse] = await Promise.all([
+          fetch(`${API_BASE}/api/health`),
+          fetch(`${API_BASE}/api/data-health`),
         ]);
         if (healthResponse.ok) {
           setBackendHealth((await healthResponse.json()) as BackendHealth);
@@ -142,7 +148,7 @@ export function useTelemetry() {
 
   const freshness = useMemo(() => {
     if (!dataHealth) {
-      return { freshSignals: 0, totalSignals: 8 };
+      return { freshSignals: 0, totalSignals: 12 };
     }
     return {
       freshSignals: dataHealth.signals_fresh,

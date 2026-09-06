@@ -58,7 +58,7 @@ def generate(args: argparse.Namespace) -> tuple[int, int]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate ideal no-fault CAN telemetry flights in PostgreSQL.")
-    parser.add_argument("--database-url", default=os.getenv("DATABASE_URL", "postgresql://uav:uav@localhost:5432/uav_telemetry"))
+    parser.add_argument("--database-url", default=os.getenv("DATABASE_URL", "postgresql://uav:uav_password_123@127.0.0.1:5432/uav_telemetry"))
     parser.add_argument("--flights", type=int, default=15)
     parser.add_argument("--steps", type=int, default=600, help="Time-series samples per flight")
     parser.add_argument("--sample-period-s", type=float, default=0.1)

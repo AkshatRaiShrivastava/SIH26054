@@ -17,7 +17,8 @@ class EngineInputs:
 
 
 @dataclass
-class EngineTelemetry:
+class EngineState:
+    """The 'Physical Truth' of the engine state."""
     rpm: float
     cht_c: float
     egt_c: float
@@ -26,6 +27,26 @@ class EngineTelemetry:
     fuel_flow_lph: float
     vibration_mms: float
     battery_voltage: float
+
+    def as_dict(self) -> Dict[str, float]:
+        return asdict(self)
+
+
+@dataclass
+class EngineTelemetry:
+    """The 'Measured' values as seen by sensors and transmitted over CAN."""
+    rpm: float
+    cht_c: float
+    egt_c: float
+    oil_pressure_kpa: float
+    oil_temperature_c: float
+    fuel_flow_lph: float
+    vibration_mms: float
+    battery_voltage: float
+    mission_stage: float = 0.0
+    altitude: float = 0.0
+    throttle: float = 0.0
+    load: float = 0.0
 
     def as_dict(self) -> Dict[str, float]:
         return asdict(self)

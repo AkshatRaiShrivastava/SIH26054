@@ -1,0 +1,137 @@
+# Surveillance Mission Profile
+name: "surveillance_mission"
+description: "A standard ISR mission following the exact operational sequence."
+
+states:
+  "OFF":
+    duration: 5.0
+    target_throttle: 0.0
+    target_load: 0.0
+    target_altitude: 0.0
+    next_state: PRE_FLIGHT
+
+  "PRE_FLIGHT":
+    duration: 10.0
+    target_throttle: 0.0
+    target_load: 0.0
+    target_altitude: 0.0
+    next_state: ENGINE_START
+
+  "ENGINE_START":
+    duration: 15.0
+    target_throttle: 0.1
+    target_load: 0.1
+    target_altitude: 0.0
+    next_state: WARMUP
+
+  "WARMUP":
+    duration: 45.0
+    target_throttle: 0.2
+    target_load: 0.2
+    target_altitude: 0.0
+    next_state: TAXI
+
+  "TAXI":
+    duration: 30.0
+    target_throttle: 0.25
+    target_load: 0.25
+    target_altitude: 0.0
+    next_state: TAKEOFF
+
+  "TAKEOFF":
+    duration: 60.0
+    target_throttle: 1.0
+    target_load: 1.0
+    target_altitude: 500.0
+    next_state: INITIAL_CLIMB
+
+  "INITIAL_CLIMB":
+    duration: 120.0
+    target_throttle: 0.9
+    target_load: 0.9
+    target_altitude: 2000.0
+    next_state: CLIMB
+
+  "CLIMB":
+    duration: 300.0
+    target_throttle: 0.8
+    target_load: 0.8
+    target_altitude: 5000.0
+    next_state: CRUISE_CLIMB
+
+  "CRUISE_CLIMB":
+    duration: 300.0
+    target_throttle: 0.7
+    target_load: 0.7
+    target_altitude: 8000.0
+    next_state: CRUISE
+
+  "CRUISE":
+    duration: 600.0
+    target_throttle: 0.6
+    target_load: 0.6
+    target_altitude: 8000.0
+    next_state: HIGH_ALTITUDE_CRUISE
+
+  "HIGH_ALTITUDE_CRUISE":
+    duration: 600.0
+    target_throttle: 0.55
+    target_load: 0.55
+    target_altitude: 10000.0
+    next_state: LOITER
+
+  "LOITER":
+    duration: 300.0
+    target_throttle: 0.5
+    target_load: 0.5
+    target_altitude: 8000.0
+    next_state: DESCENT
+
+  "DESCENT":
+    duration: 300.0
+    target_throttle: 0.4
+    target_load: 0.4
+    target_altitude: 2000.0
+    next_state: APPROACH
+
+  "APPROACH":
+    duration: 120.0
+    target_throttle: 0.3
+    target_load: 0.3
+    target_altitude: 500.0
+    next_state: LANDING
+
+  "LANDING":
+    duration: 60.0
+    target_throttle: 0.2
+    target_load: 0.2
+    target_altitude: 0.0
+    next_state: COOLDOWN
+
+  "COOLDOWN":
+    duration: 60.0
+    target_throttle: 0.1
+    target_load: 0.1
+    target_altitude: 0.0
+    next_state: SHUTDOWN
+
+  "SHUTDOWN":
+    duration: 30.0
+    target_throttle: 0.0
+    target_load: 0.0
+    target_altitude: 0.0
+    next_state: POST_FLIGHT
+
+  "POST_FLIGHT":
+    duration: 30.0
+    target_throttle: 0.0
+    target_load: 0.0
+    target_altitude: 0.0
+    next_state: MISSION_COMPLETE
+
+  "MISSION_COMPLETE":
+    duration: 99999.0
+    target_throttle: 0.0
+    target_load: 0.0
+    target_altitude: 0.0
+    next_state: null

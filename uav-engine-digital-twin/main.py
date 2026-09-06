@@ -1,12 +1,15 @@
-"""CLI entry point for the engine telemetry simulator."""
+"""CLI entry point for the enhanced UAV engine telemetry simulator."""
 
 from __future__ import annotations
 
 import argparse
+import csv
 import signal
 import sys
 import threading
+import time
 from pathlib import Path
+from typing import Optional
 
 from can_interface.can_sender import CANMapping, CANSender
 from simulator.simulator import EngineSimulator
@@ -14,123 +17,133 @@ from utils.logger import build_logger
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="UAV engine telemetry simulator")
+    parser = argparse.ArgumentParser(description="Enhanced UAV engine telemetry simulator")
     parser.add_argument("--interface", default="vcan0", help="SocketCAN interface name")
-    parser.add_argument("--throttle", type=float, default=0.5)
-    parser.add_argument("--altitude", type=float, default=0.0)
-    parser.add_argument("--ambient-temp", type=float, default=15.0)
-    parser.add_argument("--load", type=float, default=0.5)
-    parser.add_argument("--age-hours", type=float, default=0.0)
-    parser.add_argument("--health", type=float, default=1.0)
+    parser.add_argument("--mission", default="surveillance", help="Mission profile name (from config/missions/)")
+    parser.add_argument("--seed", type=int, default=None, help="Random seed for determinism")
+    parser.add_argument("--speed", type=float, default=1.0, help="Simulation speed multiplier (1.0 = realtime)")
+    parser.add_argument("--record", type=str, help="Path to CSV file for recording telemetry")
     parser.add_argument(
         "--fault",
         action="append",
         default=[],
         metavar="NAME[:SEVERITY]",
-        help="Enable a fault. Repeat for combinations, e.g. --fault overheating:1 --fault vibration_fault:0.8",
+        help="Enable a fault. Repeat for combinations, e.g. --fault cooling_degradation:0.5",
     )
-    parser.add_argument("--severity", type=float, default=0.7, help="Default severity for faults without :SEVERITY")
+    parser.add_argument("--severity", type=float, default=0.7, help="Default severity for faults")
     parser.add_argument("--mapping", default="config/can_mapping.yaml")
     return parser.parse_args()
-
-
-def command_loop(sim: EngineSimulator) -> None:
-    while True:
-        try:
-            line = input().strip()
-        except EOFError:
-            return
-        if not line:
-            continue
-        if line in {"quit", "exit"}:
-            raise KeyboardInterrupt
-        if line == "status":
-            print(f"Inputs: {sim.state}")
-            print("Active faults:", ", ".join(f"{fault.name}:{fault.severity:.2f}" for fault in sim.faults.active_faults()) or "none")
-            continue
-        if line == "faults":
-            print("Available faults:", ", ".join(sim.faults.faults))
-            print("Active faults:", ", ".join(f"{fault.name}:{fault.severity:.2f}" for fault in sim.faults.active_faults()) or "none")
-            continue
-        parts = line.split()
-        try:
-            if len(parts) == 2 and parts[0] in {"throttle", "altitude", "ambient_temp", "load", "health", "age_hours"}:
-                field = {
-                    "ambient_temp": "ambient_temperature_c", "load": "engine_load", "health": "engine_health",
-                    "age_hours": "engine_age_hours", "throttle": "throttle", "altitude": "altitude_m",
-                }[parts[0]]
-                sim.set_input(field, float(parts[1]))
-                print(f"Updated {parts[0]} to {parts[1]}")
-                continue
-            if len(parts) == 3 and parts[0] == "fault" and parts[1] != "off":
-                sim.enable_fault(parts[1], float(parts[2]))
-                print(f"Enabled {parts[1]} at severity {float(parts[2]):.2f}")
-                continue
-            if len(parts) == 3 and parts[0] == "fault" and parts[1] == "off":
-                sim.disable_fault(parts[2])
-                print(f"Disabled {parts[2]}")
-                continue
-        except (ValueError, KeyError) as error:
-            print(f"Command rejected: {error}")
-            continue
-        print("Commands: throttle <v>, altitude <m>, ambient_temp <c>, load <v>, health <v>, age_hours <v>, fault <name> <0..1>, fault off <name>, faults, status, quit")
 
 
 def main() -> int:
     args = parse_args()
     logger = build_logger()
 
-    sim = EngineSimulator()
-    sim.set_input("throttle", args.throttle)
-    sim.set_input("altitude_m", args.altitude)
-    sim.set_input("ambient_temperature_c", args.ambient_temp)
-    sim.set_input("engine_load", args.load)
-    sim.set_input("engine_age_hours", args.age_hours)
-    sim.set_input("engine_health", args.health)
+    # 1. Initialize Simulator
+    # Make path relative to this script's location
+    script_dir = Path(__file__).parent
+    mission_path = script_dir / "config" / "missions" / f"{args.mission}.yaml"
+    if not mission_path.exists():
+        logger.error(f"Mission profile not found: {mission_path}")
+        sys.exit(1)
 
+    sim = EngineSimulator(
+        mission_profile=mission_path,
+        seed=args.seed
+    )
+
+    # Apply initial faults
     for fault_spec in args.fault:
         name, separator, raw_severity = fault_spec.partition(":")
         try:
             severity = float(raw_severity) if separator else args.severity
             sim.enable_fault(name, severity)
-        except ValueError as error:
-            parser.error(str(error))
+        except ValueError:
+            logger.error(f"Invalid severity for fault {name}")
 
+    # 2. Setup CAN Interface
     mapping = CANMapping.load(Path(args.mapping))
     sender = CANSender(args.interface, mapping)
 
+    # 3. Setup Recording
+    csv_file = None
+    csv_writer = None
+    if args.record:
+        csv_file = open(args.record, "w", newline="")
+        # Headers for both True and Measured states
+        headers = ["timestamp", "state", "altitude", "throttle", "load"]
+        # true_...
+        true_fields = ["rpm", "cht_c", "egt_c", "oil_pressure_kpa", "oil_temperature_c", "fuel_flow_lph", "vibration_mms", "battery_voltage"]
+        headers += [f"true_{f}" for f in true_fields]
+        # measured_...
+        headers += [f"meas_{f}" for f in true_fields]
+
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow(headers)
+
+    # 4. Execution Loop
     stop_event = threading.Event()
-
-    def _stop(*_):
-        stop_event.set()
-
+    def _stop(*_): stop_event.set()
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
 
-    thread = threading.Thread(target=command_loop, args=(sim,), daemon=True)
-    thread.start()
+    dt = 0.1  # 10Hz base rate
+    sim_time = 0.0
 
-    step = 0
+    logger.info(f"Starting mission: {args.mission} at speed {args.speed}x")
+
     try:
         while not stop_event.is_set():
-            telemetry = sim.step(dt=0.1)
-            sender.send(telemetry)
-            step += 1
-            if step % 10 == 0:
+            loop_start = time.time()
+
+            # Step simulation
+            # telemetry contains both true_state and measured_state
+            results = sim.step(dt=dt)
+
+            # Send measured state over CAN
+            sender.send(results.measured_state)
+
+            # Record to CSV
+            if csv_writer:
+                row = [
+                    sim_time,
+                    results.mission_state,
+                    results.env_state.altitude_m,
+                    results.target_throttle,
+                    results.target_load
+                ]
+                # True state values
+                true_vals = results.true_state.as_dict().values()
+                # Measured state values
+                meas_vals = results.measured_state.as_dict().values()
+                csv_writer.writerow(row + list(true_vals) + list(meas_vals))
+
+            # Log progress every second
+            if int(sim_time * 10) % 10 == 0:
                 logger.info(
-                    "RPM=%.0f | CHT=%.1f C | EGT=%.1f C | OilP=%.1f kPa | OilT=%.1f C | Fuel=%.2f L/h | Vib=%.2f mm/s | Batt=%.2f V",
-                    telemetry.rpm,
-                    telemetry.cht_c,
-                    telemetry.egt_c,
-                    telemetry.oil_pressure_kpa,
-                    telemetry.oil_temperature_c,
-                    telemetry.fuel_flow_lph,
-                    telemetry.vibration_mms,
-                    telemetry.battery_voltage,
+                    "TIME: %.1fs | STATE: %-15s | ALT: %.0fm | RPM: %.0f | CHT: %.1fC | EGT: %.1fC",
+                    sim_time,
+                    results.mission_state,
+                    results.env_state.altitude_m,
+                    results.measured_state.rpm,
+                    results.measured_state.cht_c,
+                    results.measured_state.egt_c
                 )
+
+            sim_time += dt
+
+            # Handle simulation speed
+            # Real-time sleep: dt / speed
+            sleep_time = (dt / args.speed) - (time.time() - loop_start)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+
     finally:
         sender.close()
-        logger.info("Simulator stopped.")
+        if csv_file:
+            csv_file.close()
+        logger.info(f"Simulation ended. Total sim time: {sim_time:.1f}s")
+
     return 0
 
 

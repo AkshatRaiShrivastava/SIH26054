@@ -1,183 +1,68 @@
 # UAV Engine Digital Twin
 
-An end-to-end UAV engine telemetry system with a synthetic engine simulator, SocketCAN transport, FastAPI receiver, and a live React dashboard.
+A comprehensive digital twin for UAV engine telemetry, featuring real-time CAN ingestion, physics-based residual analysis, and flight history tracking.
 
-## Architecture
+## 🚀 Quick Start
 
-The system follows a data-pipeline approach to simulate and monitor engine health:
+The entire system is containerized for a "one-command" setup.
 
-```text
-Simulator (CAN Producer) ➔ vcan0 (Virtual CAN Bus) ➔ FastAPI Receiver (CAN Consumer) ➔ React Dashboard (UI)
-```
-
-- **Simulator**: Generates synthetic engine telemetry (RPM, Temp, Pressure) and injects faults.
-- **vcan0**: A Linux SocketCAN virtual interface that mimics a real physical CAN bus.
-- **FastAPI Backend**: Listens to the CAN bus, decodes signals, and stores telemetry in PostgreSQL.
-- **React Dashboard**: Provides real-time visualization of the engine state.
-
----
-
-## Quick Start (Linux)
-
-If you are on a native Linux system:
-
-### 1. Prerequisites
-Ensure you have the following installed:
-- Python 3.10+
-- Node.js 18+ & npm
-- Docker & Docker Compose
-- SocketCAN tools (`iproute2`, `kmod`)
-
-### 2. First Run
-From the repository root:
+### 1. Clone the repository
 ```bash
-make db-up       # Start PostgreSQL database
-make install     # Install Python and Node dependencies
-make can-up      # Setup the virtual CAN interface (vcan0)
-make dev         # Launch simulator, backend, and dashboard
+git clone <repo-url>
+cd SIH26054
 ```
-Open [http://localhost:5173](http://localhost:5173) to view the dashboard.
 
----
-
-## Windows Setup Guide (Step-by-Step)
-
-This project relies on **SocketCAN**, which is a Linux-only kernel feature. To run it on Windows, you must use **WSL2 (Windows Subsystem for Linux)**.
-
-### Step 1: Install WSL2 & Ubuntu
-If you don't have WSL installed:
-1. Open **PowerShell** as Administrator.
-2. Run the following command:
-   ```powershell
-   wsl --install -d Ubuntu
-   ```
-3. Restart your computer if prompted.
-4. Open the **Ubuntu** app from your Start Menu and follow the prompts to create a username and password.
-
-### Step 2: Install Linux Dependencies
-Inside your **Ubuntu terminal**, run:
+### 2. Configure Environment
 ```bash
-sudo apt update
-sudo apt install -y make python3 python3-pip nodejs npm iproute2 kmod
+cp .env.example .env
+# Optional: Edit .env to change passwords or ports
 ```
 
-### Step 3: Setup Docker Desktop
-1. Install [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/).
-2. In Docker Desktop settings:
-   - Go to **General** $\rightarrow$ Check **"Use the WSL 2 based engine"**.
-   - Go to **Resources** $\rightarrow$ **WSL Integration** $\rightarrow$ Enable integration for your **Ubuntu** distribution.
-3. Verify Docker is working in the Ubuntu terminal:
-   ```bash
-   docker --version
-   ```
+### 3. Start Everything
+```bash
+docker compose up --build
+```
 
-### Step 4: Running the Project
-1. Navigate to your project folder. If your project is on the `D:` drive, it will be at:
-   ```bash
-   cd /mnt/d/Akshat/College/SIH26054
-   ```
-2. Run the setup commands:
-   ```bash
-   make db-up
-   make install
-   make can-up
-   make dev
-   ```
+### 4. Access the Dashboard
+Open your browser to: **[http://localhost:3000](http://localhost:3000)**
 
 ---
 
-## Understanding vcan (Virtual CAN)
+## 🛠️ Development Commands
 
-`vcan` is a virtual CAN interface that allows you to develop and test CAN applications without needing physical hardware (like an ECU or a USB-to-CAN adapter).
-
-### How it works
-- `make can-up` executes `sudo modprobe vcan`, which loads the virtual CAN kernel module.
-- It then creates a network interface called `vcan0`.
-- The simulator sends packets to `vcan0`, and the backend reads them from `vcan0`, exactly as they would if they were on a real wire.
-
-### Troubleshooting vcan on WSL2
-The default WSL2 kernel **does not always include the `vcan` module**. If `make can-up` fails with an error like `modprobe: FATAL: Module vcan not found`, you have two options:
-
-1. **Use a Native Linux Machine/VM**: This is the most reliable way to use SocketCAN.
-2. **Custom WSL2 Kernel**: You will need to compile your own WSL2 kernel with `CONFIG_CAN=y` and `CONFIG_CAN_VCAN=m` enabled. (This is an advanced task; if you are a beginner, using a VirtualBox VM with Ubuntu is recommended).
-
----
-
-## Commands Reference
-
-| Command | Description |
+| Command | Action |
 | :--- | :--- |
-| `make install` | Install all Python and Node dependencies |
-| `make db-up` | Start local PostgreSQL via Docker Compose |
-| `make db-down` | Stop local PostgreSQL |
-| `make can-up` | Create the `vcan0` interface (Linux/WSL) |
-| `make can-down` | Remove the `vcan0` interface |
-| `make dev` | Run Simulator + Backend + Dashboard together |
-| `make simulator` | Run only the CAN simulator |
-| `make backend` | Run only the FastAPI receiver (:8000) |
-| `make frontend` | Run only the React dashboard (:5173) |
-| `make generate-data` | Create labelled ML training data in PostgreSQL |
-| `make generate-ideal-flights` | Create ideal no-fault flight data in PostgreSQL |
-| `make check` | Run tests and type validation |
-| `make build` | Build production frontend assets |
-
-*Tip: Use `CAN_INTERFACE=can0 make backend` to connect to real hardware.*
+| `make up` | Start the entire stack (equivalent to `docker compose up --build`) |
+| `make logs` | View real-time logs from all services |
+| `make down` | Stop the services (preserves database data) |
+| `make down-vol` | Stop services and **wipe all flight history** |
+| `make clean` | Complete cleanup of containers and volumes |
 
 ---
 
-## Simulator Controls
+## 📐 Architecture
 
-The simulator runs at ~10 Hz. Start it with `make simulator` and use these commands in the terminal:
+The system uses a modular Docker Compose architecture:
 
-**Startup Faults:**
-```bash
-make simulator SIMULATOR_ARGS="--fault overheating:1"
-```
+- **`can-init`**: (Privileged) Configures the Linux `vcan0` interface on the host.
+- **`uav-simulator`**: Acts as a fake ECU, pushing SocketCAN frames to `vcan0`.
+- **`uav-backend`**: Fast API server that decodes CAN, runs physics, and stores data.
+- **`uav-telemetry-postgres`**: Persistent PostgreSQL storage for flight history.
+- **`uav-frontend`**: React dashboard for live monitoring and history analysis.
 
-**Runtime Commands:**
-- `throttle <0.0-1.0>` $\rightarrow$ Change engine throttle
-- `altitude <meters>` $\rightarrow$ Change flight altitude
-- `ambient_temp <celsius>` $\rightarrow$ Change air temperature
-- `load <0.0-1.0>` $\rightarrow$ Change engine load
-- `health <0.0-1.0>` $\rightarrow$ Change overall engine health
-- `fault <fault_name> <severity>` $\rightarrow$ Inject a fault (e.g., `fault overheating 0.8`)
-- `fault off <fault_name>` $\rightarrow$ Remove a fault
-- `faults` $\rightarrow$ List active faults
-- `status` $\rightarrow$ Current engine state
-- `quit` $\rightarrow$ Stop simulator
-
-**Available Faults**: `injector_degradation`, `overheating`, `lubrication_problem`, `vibration_fault`, `sensor_drift`.
+### Data Flow
+`Simulator` $\rightarrow$ `vcan0` $\rightarrow$ `Backend` $\rightarrow$ `PostgreSQL` $\rightarrow$ `React Dashboard`
 
 ---
 
-## ML Training Data
+## 🧪 Acceptance Criteria Verification
 
-The system can generate static, labelled datasets for training ML models without needing the live CAN bus.
-
-- **Ideal Data**: `make generate-ideal-flights` generates telemetry for perfect flights.
-- **Faulty/Climate Data**: `make generate-data` generates all combinations of faults across different climate profiles (e.g., Tropical, Arctic, Desert).
-
-The data is stored in PostgreSQL in the `training_scenarios` and `training_telemetry` tables, combining CAN sensor data with ground-truth labels and climatic context.
-
----
-
-## Repository Layout
-
-```text
-.
-├── uav-engine-digital-twin/   # Engine physics simulator & CAN producer
-├── DashboardCode/
-│   ├── backend/               # CAN receiver, decoder, and FastAPI API
-│   ├── frontend/              # React dashboard
-│   ├── ml/                    # ML model training & inference
-│   └── data/                  # Archived prototype data
-├── scripts/                   # Bash/Python orchestration scripts
-├── docs/                      # Design and reference documents
-└── Makefile                   # Main entry point for all commands
-```
-
----
-
-## Notes
-
-This is a synthetic engineering prototype. The simulator uses physically plausible relationships, but its thresholds and output are not validated for use in real aircraft. Replace the simulator with a real ECU/CAN source only after proper hardware and safety validation.
+To verify the system is working:
+1. Run `docker compose up --build`.
+2. Navigate to `http://localhost:3000`.
+3. Click **START NEW SIMULATION**.
+4. Verify a **Flight ID** (e.g., `FLT-2026...`) appears.
+5. Observe **CAN Telemetry** and **Physics Residuals** updating in real-time.
+6. Click **STOP SIMULATION**.
+7. Go to **FLIGHT HISTORY** and verify the completed flight is listed.
+8. Click the flight to view historical telemetry.

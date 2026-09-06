@@ -177,7 +177,7 @@ def generate(args: argparse.Namespace) -> tuple[int, int]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate labelled, climate-aware UAV telemetry into PostgreSQL.")
-    parser.add_argument("--database-url", default=os.getenv("DATABASE_URL", "postgresql://uav:uav@localhost:5432/uav_telemetry"))
+    parser.add_argument("--database-url", default=os.getenv("DATABASE_URL", "postgresql://uav:uav_password_123@127.0.0.1:5432/uav_telemetry"))
     parser.add_argument("--steps", type=int, default=300, help="Time-series records per scenario (default: 300)")
     parser.add_argument("--sample-period-s", type=float, default=0.1)
     parser.add_argument("--samples-per-scenario", type=int, default=3, help="Climate/input variations per climate-fault combination")

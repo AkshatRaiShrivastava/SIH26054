@@ -14,10 +14,11 @@ import sqlite3
 import numpy as np
 import pandas as pd
 
+from src.core.physics_layer import PhysicsEvaluator
 from sklearn.ensemble import IsolationForest
 
 
-FEATURES = [
+RAW_FEATURES = [
     "rpm",
     "cht_c",
     "egt_c",
@@ -27,14 +28,25 @@ FEATURES = [
     "vibration_g",
     "battery_v",
     "afr",
-    "humidity_pct",
     "altitude_m",
-    "ambient_temp_c",
+    "phase",
+]
+
+FEATURES = [
+    "rpm_dev",
+    "cht_c_dev",
+    "egt_c_dev",
+    "oil_temp_c_dev",
+    "oil_pressure_psi_dev",
+    "fuel_flow_lph_dev",
+    "vibration_g_dev",
+    "battery_v_dev",
+    "afr_dev",
 ]
 
 
 def load_telemetry(conn: sqlite3.Connection) -> pd.DataFrame:
-    q = "SELECT flight_id, mission_time_s, timestamp, " + ", ".join(FEATURES) + " FROM telemetry"
+    q = "SELECT flight_id, mission_time_s, timestamp, " + ", ".join(RAW_FEATURES) + " FROM telemetry"
     df = pd.read_sql_query(q, conn)
     return df
 
@@ -51,9 +63,31 @@ def main():
     df = load_telemetry(conn)
     conn.close()
 
-    # Drop rows with NaNs and use all telemetry as baseline (ideally filter only normal flights)
-    df = df.dropna(subset=FEATURES)
-    X = df[FEATURES].values
+    print("Computing physics residuals for training set...")
+
+    # Use a dummy flight_id for the evaluator (it's only used for initialization)
+    evaluator = PhysicsEvaluator(flight_id="TRAIN-BASELINE")
+
+    residual_data = []
+    for _, row in df.iterrows():
+        # Compute expected values using physics layer
+        expected = evaluator.compute_expected_values(row.to_dict())
+
+        # Compute residuals for each feature in FEATURES
+        row_devs = []
+        for feat in FEATURES:
+            param = feat.replace("_dev", "")
+            actual = row.get(param, 0)
+            expected_val = expected.get(param, 0)
+
+            # Use the evaluator's deviation logic (percentage)
+            dev = evaluator.compute_deviation(actual, expected_val)
+            row_devs.append(dev)
+
+        residual_data.append(row_devs)
+
+    # Create DataFrame from residuals
+    X = np.array(residual_data)
 
     # Simple scaler (mean/std)
     mean = X.mean(axis=0)

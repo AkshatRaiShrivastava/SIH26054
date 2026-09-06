@@ -1,13 +1,28 @@
 services:
+  can-init:
+    image: alpine:latest
+    container_name: uav-can-init
+    privileged: true
+    network_mode: host
+    volumes:
+      - ./scripts/docker-can-init.sh:/scripts/docker-can-init.sh
+    entrypoint: ["/bin/sh", "/scripts/docker-can-init.sh"]
+    environment:
+      - CAN_INTERFACE=${CAN_INTERFACE}
+    healthcheck:
+      test: ["CMD", "ip", "link", "show", "${CAN_INTERFACE}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   postgres:
     image: postgres:16-alpine
     container_name: uav-telemetry-postgres
+    network_mode: host
     environment:
       POSTGRES_DB: uav_telemetry
       POSTGRES_USER: uav
-      POSTGRES_PASSWORD: uav
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: uav_password_123
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -15,6 +30,56 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  backend:
+    build:
+      context: ./DashboardCode
+      dockerfile: backend/Dockerfile
+    container_name: uav-backend
+    network_mode: host
+    environment:
+      - DATABASE_URL=postgresql://uav:uav_password_123@127.0.0.1:5432/uav_telemetry
+      - CAN_INTERFACE=${CAN_INTERFACE}
+      - BACKEND_PORT=${BACKEND_PORT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      can-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./DashboardCode:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+
+
+  simulator:
+    build:
+      context: ./uav-engine-digital-twin
+      dockerfile: Dockerfile
+    container_name: uav-simulator
+    network_mode: host
+    environment:
+      - CAN_INTERFACE=${CAN_INTERFACE}
+    depends_on:
+      can-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./uav-engine-digital-twin:/app
+
+  frontend:
+    build:
+      context: ./DashboardCode/frontend
+      dockerfile: Dockerfile
+    container_name: uav-frontend
+    network_mode: host
+    environment:
+      - VITE_API_URL=${VITE_API_URL}
+      - VITE_WS_URL=${VITE_WS_URL}
+    depends_on:
+      backend:
+        condition: service_started
+    volumes:
+      - ./DashboardCode/frontend:/app
+      - /app/node_modules
 
 volumes:
   postgres_data:

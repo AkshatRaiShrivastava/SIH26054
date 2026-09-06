@@ -8,15 +8,14 @@ Baseline: Rotax 912/914 turbocharged engine profile.
 # ============================================================================
 
 MISSION_PHASES = {
-    "preflight": {"start_s": 0, "duration_s": 600, "rpm_target": 1000},
-    "takeoff": {"start_s": 600, "duration_s": 180, "rpm_target": 5500},
-    "climb": {"start_s": 780, "duration_s": 900, "rpm_target": 4500},
-    "cruise": {"start_s": 1680, "duration_s": 2400, "rpm_target": 3200},
-    "descent": {"start_s": 4080, "duration_s": 600, "rpm_target": 2500},
-    "landing": {"start_s": 4680, "duration_s": 300, "rpm_target": 1500},
+    "preflight": {"start_s": 0, "duration_s": 10, "rpm_target": 1000},
+    "takeoff": {"start_s": 10, "duration_s": 10, "rpm_target": 5500},
+    "high_altitude": {"start_s": 20, "duration_s": 20, "rpm_target": 3200},
+    "low_altitude": {"start_s": 40, "duration_s": 10, "rpm_target": 2500},
+    "landing": {"start_s": 50, "duration_s": 10, "rpm_target": 1500},
 }
 
-TOTAL_FLIGHT_DURATION_S = 5000  # ~1.4 hours
+TOTAL_FLIGHT_DURATION_S = 60  # Total flight duration (s)
 
 # ============================================================================
 # ENGINE PARAMETERS - Rotax 912/914 (turbocharged)

@@ -1,1 +1,0 @@
-"""Telemetry backend package."""
