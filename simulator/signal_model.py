@@ -60,8 +60,8 @@ def phase_target_state(elapsed_s: float, phase_id: int, throttle: float, load: f
     return {"rpm": rpm, "fuel_flow": fuel_flow, "altitude_m": alt, "ambient_temp_c": ambient}
 
 
-def simulate_tick(elapsed_s: float, previous: dict, scenario: str, health_index: float = 100.0, fault_severity: float = 0.0):
-    phase_id = phase_for_elapsed(elapsed_s)
+def simulate_tick(elapsed_s: float, previous: dict, scenario: str, health_index: float = 100.0, fault_severity: float = 0.0, phase_durations_s: dict[int, float] | None = None):
+    phase_id = phase_for_elapsed(elapsed_s, phase_durations_s)
     throttle = 25.0 + 50.0 * (1.0 if phase_id >= 2 else 0.5)
     load = 35.0 + (elapsed_s / 3600.0) * 60.0
     altitude = 0.0

@@ -1,0 +1,35 @@
+VERSION ""
+
+NS_ :
+BS_ :
+
+BU_ : UAV_Engine
+
+BO_ 256 ENGINE_CORE: 4 UAV_Engine
+ SG_ RPM : 0|16@1+ (1,0) [0|20000] "rpm" UAV_Engine
+ SG_ EngineLoad : 16|8@1+ (1,0) [0|100] "%" UAV_Engine
+ SG_ Throttle : 24|8@1+ (1,0) [0|100] "%" UAV_Engine
+
+BO_ 257 TEMPERATURES: 4 TEMPERATURES
+ SG_ CHT : 0|16@1+ (1,0) [-40|250] "degC" UAV_Engine
+ SG_ EGT : 16|16@1+ (1,0) [0|1200] "degC" UAV_Engine
+
+BO_ 258 LUBRICATION: 4 LUBRICATION
+ SG_ OilPressure : 0|16@1+ (1,0) [0|800] "kPa" UAV_Engine
+ SG_ OilTemperature : 16|16@1+ (1,0) [-40|180] "degC" UAV_Engine
+
+BO_ 259 FUEL: 6 FUEL
+ SG_ FuelFlow : 0|16@1+ (1,0) [0|80] "L/h" UAV_Engine
+ SG_ FuelPressure : 16|16@1+ (1,0) [0|500] "kPa" UAV_Engine
+ SG_ AFR : 32|16@1+ (0.01,0) [8|20] "-" UAV_Engine
+
+BO_ 260 VIBRATION: 2 VIBRATION
+ SG_ EngineVibration : 0|16@1+ (0.01,0) [0|20] "mm/s" UAV_Engine
+
+BO_ 261 ELECTRICAL: 4 ELECTRICAL
+ SG_ BatteryVoltage : 0|16@1+ (0.01,0) [0|30] "V" UAV_Engine
+ SG_ AlternatorVoltage : 16|16@1+ (0.01,0) [0|30] "V" UAV_Engine
+
+BO_ 262 ENVIRONMENT: 4 ENVIRONMENT
+ SG_ Altitude : 0|16@1+ (1,0) [0|12000] "m" UAV_Engine
+ SG_ AmbientTemperature : 16|16@1+ (1,0) [-60|60] "degC" UAV_Engine

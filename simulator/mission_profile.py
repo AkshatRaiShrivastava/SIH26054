@@ -13,6 +13,8 @@ PHASES = {
     6: {"name": "LAND", "start": 3540, "end": 3600},
 }
 
+DEFAULT_PHASE_DURATIONS_S = {phase_id: phase["end"] - phase["start"] for phase_id, phase in PHASES.items()}
+
 
 @dataclass(frozen=True)
 class ScenarioSpec:
@@ -34,8 +36,19 @@ SCENARIO_SPECS = {
 }
 
 
-def phase_for_elapsed(elapsed_s: float) -> int:
-    for phase_id, phase in sorted(PHASES.items()):
+def phase_bounds(durations_s: dict[int, float] | None = None) -> dict[int, dict[str, float]]:
+    durations = durations_s or DEFAULT_PHASE_DURATIONS_S
+    start = 0.0
+    bounds = {}
+    for phase_id in sorted(PHASES):
+        end = start + max(1.0, float(durations.get(phase_id, DEFAULT_PHASE_DURATIONS_S[phase_id])))
+        bounds[phase_id] = {"start": start, "end": end, "name": PHASES[phase_id]["name"]}
+        start = end
+    return bounds
+
+
+def phase_for_elapsed(elapsed_s: float, durations_s: dict[int, float] | None = None) -> int:
+    for phase_id, phase in phase_bounds(durations_s).items():
         if phase["start"] <= elapsed_s < phase["end"]:
             return phase_id
     return 6

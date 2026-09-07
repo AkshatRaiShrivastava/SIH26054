@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class MissionStartRequest(BaseModel):
     scenario: str = "normal"
     speed_multiplier: float = 1.0
+    phase_durations_s: Dict[int, float] = Field(default_factory=dict)
 
 
 class TelemetryRecord(BaseModel):

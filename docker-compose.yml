@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   postgres:
     image: postgres:16
@@ -37,6 +36,20 @@ services:
       then psql -h postgres -U "$$POSTGRES_USER" -d postgres -c "CREATE DATABASE \"$$POSTGRES_DB\""; fi;
       psql -h postgres -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -f /init.sql'
 
+  can-init:
+    image: alpine:3.20
+    container_name: uav-can-init
+    network_mode: host
+    privileged: true
+    command: >-
+      sh -c 'set -e;
+      apk add --no-cache iproute2 kmod >/dev/null;
+      modprobe vcan 2>/dev/null || true;
+      ip link show "$$CAN_INTERFACE" >/dev/null 2>&1 || ip link add dev "$$CAN_INTERFACE" type vcan;
+      ip link set "$$CAN_INTERFACE" up'
+    environment:
+      CAN_INTERFACE: ${CAN_INTERFACE:-vcan0}
+
   backend:
     build:
       context: .
@@ -44,6 +57,8 @@ services:
     container_name: uav-backend
     depends_on:
       db-init:
+        condition: service_completed_successfully
+      can-init:
         condition: service_completed_successfully
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://uav:password@localhost:5432/uav_engine}
@@ -66,6 +81,8 @@ services:
     container_name: uav-simulator
     depends_on:
       db-init:
+        condition: service_completed_successfully
+      can-init:
         condition: service_completed_successfully
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://uav:password@localhost:5432/uav_engine}

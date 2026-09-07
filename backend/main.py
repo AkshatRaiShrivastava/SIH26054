@@ -7,6 +7,7 @@ import threading
 import time
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -19,6 +20,7 @@ from ingestion.listener import CANListener
 from ingestion.processor import TelemetryProcessor
 from physics.atmosphere import ambient_temperature_c
 from rul.predict import predict_rul
+from simulator.mission_profile import phase_name, phase_bounds
 
 app = FastAPI(title="UAV Engine Digital Twin")
 app.add_middleware(
@@ -41,6 +43,68 @@ SIMULATION_STATE = {
     "websockets": defaultdict(list),
     "thread": None,
 }
+RUNTIME_DIR = os.getenv("RUNTIME_DIR", "/workspace/runtime")
+SCENARIO_FILE = Path(RUNTIME_DIR) / "scenario.json"
+STATUS_FILE = Path(RUNTIME_DIR) / "simulation_status.json"
+
+
+def write_scenario_control(scenario: str, phase_durations_s: dict[int, float], mission_id: str) -> None:
+    SCENARIO_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SCENARIO_FILE.write_text(json.dumps({"scenario": scenario, "phase_durations_s": phase_durations_s, "mission_id": mission_id}), encoding="utf-8")
+
+
+def read_simulation_status() -> dict | None:
+    try:
+        return json.loads(STATUS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def get_mission_timing(mission_id: str) -> tuple[float, int, float]:
+    status = read_simulation_status()
+    if status and status.get("mission_id") == mission_id:
+        elapsed_s = float(status.get("elapsed_s", 0.0))
+        phase_id = int(status.get("phase_id", 0))
+        phase_durations = status.get("phase_durations_s")
+        if phase_durations:
+            total_duration = sum(float(v) for v in phase_durations.values())
+        else:
+            total_duration = 3600.0
+        return elapsed_s, phase_id, total_duration
+    return 0.0, 0, 3600.0
+
+
+def timing_payload(mission_id: str) -> dict:
+    elapsed_s, phase_id, total_duration_s = get_mission_timing(mission_id)
+    return {
+        "elapsed_s": elapsed_s,
+        "phase_id": phase_id,
+        "mission_total_s": total_duration_s,
+        "remaining_s": max(0.0, total_duration_s - elapsed_s),
+    }
+
+
+def complete_simulation(mission_id: str) -> None:
+    if SIMULATION_STATE["mission_id"] != mission_id or not SIMULATION_STATE["running"]:
+        return
+    if SIMULATION_STATE["listener"]:
+        SIMULATION_STATE["listener"].stop()
+    SIMULATION_STATE["running"] = False
+    with SessionLocal() as db:
+        db.execute(text("UPDATE mission_runs SET status = 'completed', ended_at = NOW() WHERE mission_id = :mission_id"), {"mission_id": mission_id})
+        db.commit()
+
+
+def monitor_simulation(mission_id: str) -> None:
+    while SIMULATION_STATE["mission_id"] == mission_id and SIMULATION_STATE["running"]:
+        try:
+            status = json.loads(STATUS_FILE.read_text(encoding="utf-8"))
+            if status.get("mission_id") == mission_id and status.get("status") == "completed":
+                complete_simulation(mission_id)
+                return
+        except (OSError, json.JSONDecodeError):
+            pass
+        time.sleep(0.25)
 
 
 @app.on_event("startup")
@@ -56,11 +120,15 @@ def health():
 
 @app.post("/api/simulation/start")
 def start_simulation(payload: MissionStartRequest):
+    if SIMULATION_STATE["listener"]:
+        SIMULATION_STATE["listener"].stop()
     mission_id = f"MISSION-{uuid4().hex[:8]}"
+    write_scenario_control(payload.scenario, payload.phase_durations_s, mission_id)
     SIMULATION_STATE["running"] = True
     SIMULATION_STATE["mission_id"] = mission_id
     SIMULATION_STATE["scenario"] = payload.scenario
     SIMULATION_STATE["speed_multiplier"] = payload.speed_multiplier
+    SIMULATION_STATE["last_result"] = None
     SIMULATION_STATE["processor"] = TelemetryProcessor(mission_id)
     SIMULATION_STATE["listener"] = CANListener(mission_id, interface=os.getenv("CAN_INTERFACE", "vcan0"), callback=process_raw_record)
     SIMULATION_STATE["listener"].start()
@@ -72,6 +140,7 @@ def start_simulation(payload: MissionStartRequest):
             {"mission_id": mission_id, "scenario": payload.scenario, "speed_multiplier": payload.speed_multiplier},
         )
         db.commit()
+    threading.Thread(target=monitor_simulation, args=(mission_id,), daemon=True).start()
     return {"mission_id": mission_id, "status": "running"}
 
 
@@ -90,8 +159,15 @@ def stop_simulation():
 
 @app.get("/api/simulation/status")
 def get_status():
+    timing = timing_payload(SIMULATION_STATE["mission_id"]) if SIMULATION_STATE["mission_id"] else {
+        "elapsed_s": 0.0,
+        "phase_id": 0,
+        "mission_total_s": 0.0,
+        "remaining_s": 0.0,
+    }
     return {
         "running": SIMULATION_STATE["running"],
+        "status": "running" if SIMULATION_STATE["running"] else "completed",
         "mission_id": SIMULATION_STATE["mission_id"],
         "scenario": SIMULATION_STATE["scenario"],
         "speed_multiplier": SIMULATION_STATE["speed_multiplier"],
@@ -99,6 +175,7 @@ def get_status():
         "listener_snapshot_count": SIMULATION_STATE["listener"].snapshot_count if SIMULATION_STATE["listener"] else 0,
         "listener_missing_signals": SIMULATION_STATE["listener"].missing_signals() if SIMULATION_STATE["listener"] else [],
         "last_update": SIMULATION_STATE["last_result"],
+        **timing,
     }
 
 
@@ -122,6 +199,45 @@ def mission_detail(mission_id: str):
     if not row:
         raise HTTPException(status_code=404, detail="Mission not found")
     return {"mission_id": row[0], "scenario": row[1], "status": row[2], "started_at": str(row[3]), "ended_at": str(row[4])}
+
+
+@app.get("/api/missions/{mission_id}/details")
+def mission_details(mission_id: str):
+    with SessionLocal() as db:
+        mission = db.execute(text("SELECT mission_id, scenario, status, started_at, ended_at FROM mission_runs WHERE mission_id = :mission_id"), {"mission_id": mission_id}).fetchone()
+        if not mission:
+            raise HTTPException(status_code=404, detail="Mission not found")
+        latest = db.execute(text("SELECT rpm, cht_c, egt_c, oil_pressure_kpa, oil_temperature_c, fuel_flow_lph, vibration_mms, afr, battery_voltage, altitude_m, ambient_temp_c FROM raw_telemetry WHERE mission_id = :mission_id ORDER BY id DESC LIMIT 1"), {"mission_id": mission_id}).fetchone()
+        metrics = db.execute(text("SELECT AVG(health_index), MAX(anomaly_score), COUNT(*) FROM computed_metrics WHERE mission_id = :mission_id"), {"mission_id": mission_id}).fetchone()
+        faults = db.execute(text("SELECT fault_category, confidence, elapsed_s, driving_features FROM fault_events WHERE mission_id = :mission_id ORDER BY id DESC LIMIT 20"), {"mission_id": mission_id}).fetchall()
+    return {
+        "mission_id": mission[0], "scenario": mission[1], "status": mission[2],
+        "started_at": str(mission[3]), "ended_at": str(mission[4]),
+        "latest": dict(zip(["rpm", "cht_c", "egt_c", "oil_pressure_kpa", "oil_temperature_c", "fuel_flow_lph", "vibration_mms", "afr", "battery_voltage", "altitude_m", "ambient_temp_c"], latest)) if latest else None,
+        "summary": {"average_health": metrics[0] or 0, "peak_anomaly": metrics[1] or 0, "samples": metrics[2] or 0},
+        "faults": [{"category": fault[0], "confidence": fault[1], "elapsed_s": fault[2], "features": fault[3] or []} for fault in faults],
+    }
+
+
+@app.delete("/api/missions/{mission_id}")
+def delete_mission(mission_id: str):
+    with SessionLocal() as db:
+        exists = db.execute(text("SELECT 1 FROM mission_runs WHERE mission_id = :mission_id"), {"mission_id": mission_id}).scalar()
+        if not exists:
+            raise HTTPException(status_code=404, detail="Mission not found")
+        for table in ("raw_telemetry", "computed_metrics", "fault_events", "rul_predictions", "mission_runs"):
+            db.execute(text(f"DELETE FROM {table} WHERE mission_id = :mission_id"), {"mission_id": mission_id})
+        db.commit()
+    return {"status": "deleted", "mission_id": mission_id}
+
+
+@app.delete("/api/missions")
+def clear_missions():
+    with SessionLocal() as db:
+        for table in ("raw_telemetry", "computed_metrics", "fault_events", "rul_predictions", "mission_runs"):
+            db.execute(text(f"DELETE FROM {table}"))
+        db.commit()
+    return {"status": "cleared"}
 
 
 @app.get("/api/missions/{mission_id}/trend")
@@ -179,13 +295,16 @@ def process_raw_record(record: dict):
     processor = SIMULATION_STATE["processor"]
     if processor is None:
         return
+    sim_elapsed, sim_phase, sim_total = get_mission_timing(mission_id)
+    record["elapsed_s"] = sim_elapsed
+    record["phase_id"] = sim_phase
     metrics = processor.process(record)
     with SessionLocal() as db:
         db.execute(
             text(
                 "INSERT INTO raw_telemetry (mission_id, elapsed_s, phase_id, rpm, cht_c, egt_c, oil_pressure_kpa, oil_temperature_c, fuel_flow_lph, vibration_mms, afr, battery_voltage, altitude_m, ambient_temp_c) VALUES (:mission_id, :elapsed_s, :phase_id, :rpm, :cht_c, :egt_c, :oil_pressure_kpa, :oil_temperature_c, :fuel_flow_lph, :vibration_mms, :afr, :battery_voltage, :altitude_m, :ambient_temp_c)"
             ),
-            {"mission_id": mission_id, "elapsed_s": record.get("elapsed_s", 0.0), "phase_id": record.get("phase_id", 0), "rpm": record.get("rpm", 0.0), "cht_c": record.get("cht_c", 0.0), "egt_c": record.get("egt_c", 0.0), "oil_pressure_kpa": record.get("oil_pressure_kpa", 0.0), "oil_temperature_c": record.get("oil_temperature_c", 0.0), "fuel_flow_lph": record.get("fuel_flow_lph", 0.0), "vibration_mms": record.get("vibration_mms", 0.0), "afr": record.get("afr", 14.7), "battery_voltage": record.get("battery_voltage", 13.5), "altitude_m": record.get("altitude_m", 0.0), "ambient_temp_c": record.get("ambient_temp_c", 15.0)},
+            {"mission_id": mission_id, "elapsed_s": sim_elapsed, "phase_id": sim_phase, "rpm": record.get("rpm", 0.0), "cht_c": record.get("cht_c", 0.0), "egt_c": record.get("egt_c", 0.0), "oil_pressure_kpa": record.get("oil_pressure_kpa", 0.0), "oil_temperature_c": record.get("oil_temperature_c", 0.0), "fuel_flow_lph": record.get("fuel_flow_lph", 0.0), "vibration_mms": record.get("vibration_mms", 0.0), "afr": record.get("afr", 14.7), "battery_voltage": record.get("battery_voltage", 13.5), "altitude_m": record.get("altitude_m", 0.0), "ambient_temp_c": record.get("ambient_temp_c", 15.0)},
         )
         db.execute(
             text(
@@ -193,8 +312,8 @@ def process_raw_record(record: dict):
             ),
             {
                 "mission_id": mission_id,
-                "elapsed_s": record.get("elapsed_s", 0.0),
-                "phase_id": record.get("phase_id", 0),
+                "elapsed_s": sim_elapsed,
+                "phase_id": sim_phase,
                 "cht_expected": metrics["computed"]["cht_expected"],
                 "cht_deviation_pct": metrics["computed"]["cht_deviation_pct"],
                 "egt_expected": metrics["computed"]["egt_expected"],
@@ -214,15 +333,18 @@ def process_raw_record(record: dict):
             },
         )
         if metrics["fault_alert"]:
-            db.execute(text("INSERT INTO fault_events (mission_id, elapsed_s, fault_category, confidence, driving_features) VALUES (:mission_id, :elapsed_s, :fault_category, :confidence, :driving_features)"), {"mission_id": mission_id, "elapsed_s": record.get("elapsed_s", 0.0), "fault_category": metrics["fault_alert"]["fault_category"], "confidence": metrics["fault_alert"]["confidence"], "driving_features": metrics["fault_alert"]["driving_features"]})
+            db.execute(text("INSERT INTO fault_events (mission_id, elapsed_s, fault_category, confidence, driving_features) VALUES (:mission_id, :elapsed_s, :fault_category, :confidence, :driving_features)"), {"mission_id": mission_id, "elapsed_s": sim_elapsed, "fault_category": metrics["fault_alert"]["fault_category"], "confidence": metrics["fault_alert"]["confidence"], "driving_features": metrics["fault_alert"]["driving_features"]})
         db.commit()
     if metrics["fault_alert"]:
         print(json.dumps(metrics["fault_alert"]))
     result = {
         "channel": "live",
         "mission_id": mission_id,
-        "elapsed_s": record.get("elapsed_s", 0.0),
-        "phase_id": record.get("phase_id", 0),
+        "elapsed_s": sim_elapsed,
+        "phase_id": sim_phase,
+        "phase_name": phase_name(sim_phase),
+        "mission_total_s": sim_total,
+        "remaining_s": max(0.0, sim_total - sim_elapsed),
         "raw": {
             "rpm": float(record.get("rpm", 0.0)),
             "cht_c": float(record.get("cht_c", 0.0)),
@@ -256,6 +378,8 @@ def process_raw_record(record: dict):
             "confidence_band_minutes": 0,
             "driving_channel": "n/a",
         },
+        "mission_total_s": sim_total,
+        "remaining_s": max(0.0, sim_total - sim_elapsed),
     }
     SIMULATION_STATE["last_result"] = result
     if mission_id in SIMULATION_STATE["websockets"]:
