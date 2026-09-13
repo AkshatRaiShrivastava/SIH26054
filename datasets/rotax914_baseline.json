@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "dataset_id": "rotax914_baseline_dataset",
+  "label": "Rotax 914 baseline dataset",
+  "fluctuation": {
+    "cht_c": [0.015, 0.9],
+    "oil_temp_c": [0.012, 0.92],
+    "oil_pressure_psi": [0.02, 0.85],
+    "egt_c": [0.015, 0.88],
+    "fuel_flow_lph": [0.03, 0.8],
+    "vibration_g": [0.05, 0.7]
+  },
+  "environments": {
+    "standard_normal_altitude": {
+      "isa_dev_c": 0.0,
+      "cruise_altitude_m": 2500.0,
+      "airfield_elevation_m": 300.0,
+      "label": "Standard day, normal cruise altitude"
+    },
+    "hot_normal_altitude": {
+      "isa_dev_c": 30.0,
+      "cruise_altitude_m": 2500.0,
+      "airfield_elevation_m": 300.0,
+      "label": "Hot day (ISA+30), normal cruise altitude"
+    },
+    "cold_normal_altitude": {
+      "isa_dev_c": -25.0,
+      "cruise_altitude_m": 2500.0,
+      "airfield_elevation_m": 300.0,
+      "label": "Cold day (ISA-25), normal cruise altitude"
+    },
+    "standard_high_altitude": {
+      "isa_dev_c": 0.0,
+      "cruise_altitude_m": 6000.0,
+      "airfield_elevation_m": 300.0,
+      "label": "Standard day, high-altitude cruise"
+    },
+    "hot_high_altitude": {
+      "isa_dev_c": 30.0,
+      "cruise_altitude_m": 6000.0,
+      "airfield_elevation_m": 300.0,
+      "label": "Hot day (ISA+30), high-altitude cruise"
+    },
+    "cold_high_altitude": {
+      "isa_dev_c": -25.0,
+      "cruise_altitude_m": 6000.0,
+      "airfield_elevation_m": 300.0,
+      "label": "Cold day (ISA-25), high-altitude cruise"
+    }
+  },
+  "stages": [
+    {"name": "GROUND_IDLE", "rpm": 1400, "throttle": 0.08, "afr": 14.7, "altitude_frac": 0.0, "default_duration_s": 120},
+    {"name": "TAXI", "rpm": 1800, "throttle": 0.15, "afr": 14.7, "altitude_frac": 0.0, "default_duration_s": 180},
+    {"name": "TAKEOFF", "rpm": 5800, "throttle": 1.0, "afr": 12.5, "altitude_frac": 0.05, "default_duration_s": 60},
+    {"name": "CLIMB", "rpm": 5200, "throttle": 0.85, "afr": 13.5, "altitude_frac": 0.8, "default_duration_s": 600},
+    {"name": "CRUISE_LOITER", "rpm": 4200, "throttle": 0.55, "afr": 15.0, "altitude_frac": 0.72, "default_duration_s": 3600},
+    {"name": "DESCENT", "rpm": 3000, "throttle": 0.25, "afr": 14.7, "altitude_frac": 0.3, "default_duration_s": 480},
+    {"name": "LANDING", "rpm": 1400, "throttle": 0.08, "afr": 14.7, "altitude_frac": 0, "default_duration_s": 90},
+    {"name": "SHUTDOWN", "rpm": 800, "throttle": 0.0, "afr": 14.7, "altitude_frac": 0.0, "default_duration_s": 60}
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "dataset_id": "rotax914_baseline_dataset",
+  "label": "Rotax 914 baseline dataset (Part B 9-phase mission profile, compressed demo durations)",
+  "fluctuation": {
+    "cht_c": [0.015, 0.9],
+    "oil_temp_c": [0.012, 0.92],
+    "oil_pressure_psi": [0.02, 0.85],
+    "egt_c": [0.015, 0.88],
+    "fuel_flow_lph": [0.03, 0.8],
+    "vibration_g": [0.05, 0.7]
+  },
+  "environments": {
+    "standard_normal_altitude": {
+      "isa_dev_c": 0.0,
+      "cruise_altitude_m": 2500.0,
+      "airfield_elevation_m": 300.0,
+      "label": "Standard day, normal cruise altitude"
+    },
+    "hot_normal_altitude": {
+      "isa_dev_c": 30.0,
+      "cruise_altitude_m": 2500.0,
+      "airfield_elevation_m": 300.0,
+      "label": "Hot day (ISA+30), normal cruise altitude"
+    },
+    "cold_normal_altitude": {
+      "isa_dev_c": -25.0,
+      "cruise_altitude_m": 2500.0,
+      "airfield_elevation_m": 300.0,
+      "label": "Cold day (ISA-25), normal cruise altitude"
+    },
+    "standard_high_altitude": {
+      "isa_dev_c": 0.0,
+      "cruise_altitude_m": 6000.0,
+      "airfield_elevation_m": 300.0,
+      "label": "Standard day, high-altitude cruise"
+    },
+    "hot_high_altitude": {
+      "isa_dev_c": 30.0,
+      "cruise_altitude_m": 6000.0,
+      "airfield_elevation_m": 300.0,
+      "label": "Hot day (ISA+30), high-altitude cruise"
+    },
+    "cold_high_altitude": {
+      "isa_dev_c": -25.0,
+      "cruise_altitude_m": 6000.0,
+      "airfield_elevation_m": 300.0,
+      "label": "Cold day (ISA-25), high-altitude cruise"
+    }
+  },
+  "stages": [
+    {
+      "name": "START_WARMUP",
+      "rpm": 1700,
+      "throttle": 0.0,
+      "afr": 12.75,
+      "altitude_frac": 0.0,
+      "default_duration_s": 18,
+      "_source_note": "Table 2 phase 1 (0->1700 RPM cold start, oil pressure build-up); throttle/AFR from Table 3/4 Idle column"
+    },
+    {
+      "name": "GROUND_IDLE_TAXI",
+      "rpm": 1550,
+      "throttle": 0.0,
+      "afr": 12.75,
+      "altitude_frac": 0.0,
+      "default_duration_s": 13,
+      "_source_note": "Table 2 phase 2 (1400-1700 RPM midpoint); Table 3/4 Idle column"
+    },
+    {
+      "name": "TAKEOFF",
+      "rpm": 5800,
+      "throttle": 1.15,
+      "afr": 12.0,
+      "altitude_frac": 0.05,
+      "default_duration_s": 5,
+      "_source_note": "Table 2/3/4 Takeoff/Full Power column, 115% throttle with enrichener ON"
+    },
+    {
+      "name": "CLIMB",
+      "rpm": 5650,
+      "throttle": 1.08,
+      "afr": 12.5,
+      "altitude_frac": 1.0,
+      "default_duration_s": 18,
+      "_source_note": "Table 3/4 Climb column (5500-5800 RPM, 108-115% throttle tapering to 100%, midpoint used); altitude_frac=1.0 because climb's purpose is reaching cruise altitude"
+    },
+    {
+      "name": "CRUISE_TRANSIT",
+      "rpm": 5000,
+      "throttle": 0.85,
+      "afr": 14.0,
+      "altitude_frac": 1.0,
+      "default_duration_s": 25,
+      "_source_note": "Table 2 phase 5 described as max-cruise OR normal-cruise; Normal Cruise column used as representative (5000 RPM, 85% throttle, AFR 13.5-14.5 midpoint)"
+    },
+    {
+      "name": "LOITER_ISR",
+      "rpm": 5000,
+      "throttle": 0.75,
+      "afr": 14.35,
+      "altitude_frac": 1.0,
+      "default_duration_s": 45,
+      "_source_note": "Table 2's own stated Loiter range midpointed directly (4800-5200 RPM, 65-85% throttle); AFR from closest Economy Cruise column. Dominant/endurance phase -- pair with enable_wear() for degradation demo"
+    },
+    {
+      "name": "DESCENT",
+      "rpm": 4400,
+      "throttle": 0.475,
+      "afr": 14.5,
+      "altitude_frac": 0.15,
+      "default_duration_s": 18,
+      "_source_note": "Table 3/4 Descent column (est. values per document); altitude_frac partially reduced, not yet at pattern altitude"
+    },
+    {
+      "name": "APPROACH_LANDING",
+      "rpm": 2850,
+      "throttle": 0.5,
+      "afr": 13.25,
+      "altitude_frac": 0.05,
+      "default_duration_s": 13,
+      "_source_note": "Table 3/4 Approach & Landing column midpointed; document flags this phase as rapid/variable throttle -- use the simulator's dedicated Rapid Throttle Transition scenario here instead of this single steady value for stress-testing misfire/instability detection"
+    },
+    {
+      "name": "SHUTDOWN_COOLDOWN",
+      "rpm": 0,
+      "throttle": 0.0,
+      "afr": 14.7,
+      "altitude_frac": 0.0,
+      "default_duration_s": 10,
+      "_source_note": "Table 2 phase 9: idle RPM declining to 0, oil pressure decaying to zero"
+    }
+  ]
+}
