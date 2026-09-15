@@ -116,7 +116,7 @@ def stage_altitude_m(altitude_frac: float, airfield_elevation_m: float, cruise_a
 
 def build_reference_dataset():
     """One row per (environment preset x stage), steady-state expected values."""
-    import physics_model as pm
+    import EngineSimulator.files.physics_model as pm
 
     rows = []
     for env_key, (isa_dev_c, cruise_alt, airfield_elev, label) in ENVIRONMENT_PRESETS.items():

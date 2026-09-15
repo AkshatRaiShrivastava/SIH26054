@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: fadec-emitter-service
+    env: node
+    # The service lives in the fadc_emitter_service subdirectory
+    repo: .
+    branch: main
+    buildCommand: cd fadc_emitter_service && npm install && npm run build
+    startCommand: cd fadc_emitter_service && npm start
+    # Render will inject the environment variable; set a placeholder here for documentation
+    envVars:
+      - key: FADEC_CAN_KEY
+        value: "<your‑32‑byte‑hex‑or‑base64‑key>"
+        preview: true
+        required: true

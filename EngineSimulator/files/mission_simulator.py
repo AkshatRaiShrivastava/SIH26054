@@ -22,8 +22,8 @@ import json
 import random
 import time as time_module
 
-import physics_model as pm
-from mission_stages import DEFAULT_DATASET, stage_altitude_m
+import EngineSimulator.files.physics_model as pm
+from EngineSimulator.files.mission_stages import DEFAULT_DATASET, stage_altitude_m
 
 
 # Per-channel fluctuation size (fraction of expected value, 1-sigma) and
